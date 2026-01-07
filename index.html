@@ -1,0 +1,2263 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>视像化猜拳游戏 | Rock Paper Scissors</title>
+    <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@400;600;700&display=swap" rel="stylesheet">
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: 'Outfit', sans-serif;
+            font-family: 'Outfit', sans-serif;
+            background: linear-gradient(135deg, #0f0c29, #302b63, #24243e);
+            color: white;
+            min-height: 100vh;
+            overflow: hidden;
+        }
+
+        .container {
+            position: relative;
+            width: 100vw;
+            height: 100vh;
+        }
+
+        /* 摄像头视频 */
+        #camera {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            object-fit: cover;
+            transform: scaleX(-1);
+            z-index: 1;
+        }
+
+        /* 手部追踪画布 */
+        #handCanvas {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            z-index: 2;
+        }
+
+        /* 粒子效果画布 */
+        #effectCanvas {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            z-index: 3;
+            pointer-events: none;
+        }
+
+
+
+        /* 游戏界面覆盖层 */
+        .game-overlay {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            z-index: 10;
+            pointer-events: none;
+        }
+
+        /* 顶部计分板 */
+        .scoreboard {
+            position: absolute;
+            top: 20px;
+            left: 50%;
+            transform: translateX(-50%);
+            display: flex;
+            gap: 40px;
+            background: rgba(0, 0, 0, 0.7);
+            padding: 15px 40px;
+            border-radius: 20px;
+            backdrop-filter: blur(15px);
+            border: 1px solid rgba(255, 255, 255, 0.1);
+            pointer-events: auto;
+            z-index: 10;
+        }
+
+        .score-item {
+            text-align: center;
+        }
+
+        .score-label {
+            font-size: 14px;
+            opacity: 0.8;
+            margin-bottom: 5px;
+        }
+
+        .score-value {
+            font-size: 32px;
+            font-weight: 700;
+        }
+
+        .score-value.player {
+            color: #00ff88;
+        }
+
+        .score-value.computer {
+            color: #ff4466;
+        }
+
+        .score-value.points {
+            color: #ffd700;
+        }
+
+        .score-value.level {
+            color: #bd00ff;
+        }
+
+        /* 战斗区域 */
+        .battle-area {
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            display: flex;
+            align-items: center;
+            gap: 60px;
+            z-index: 50;
+            pointer-events: none;
+        }
+
+        .gesture-display {
+            width: 180px;
+            height: 180px;
+            background: rgba(0, 0, 0, 0.6);
+            border-radius: 50%;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            backdrop-filter: blur(10px);
+            border: 3px solid rgba(255, 255, 255, 0.2);
+            transition: all 0.3s ease;
+        }
+
+        .gesture-group {
+            display: flex;
+            gap: 20px;
+        }
+
+        .gesture-display.player {
+            border-color: #00ff88;
+            box-shadow: 0 0 30px rgba(0, 255, 136, 0.3);
+        }
+
+        .gesture-display.computer {
+            border-color: #ff4466;
+            box-shadow: 0 0 30px rgba(255, 68, 102, 0.3);
+        }
+
+        .gesture-emoji {
+            font-size: 72px;
+            margin-bottom: 5px;
+        }
+
+        .gesture-name {
+            font-size: 18px;
+            font-weight: 600;
+        }
+
+        .vs-text {
+            font-size: 36px;
+            font-weight: 700;
+            color: #ffd700;
+            text-shadow: 0 0 20px rgba(255, 215, 0, 0.5);
+        }
+
+        /* 倒计时 */
+        .countdown {
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            font-size: 150px;
+            font-weight: 700;
+            color: #ffd700;
+            text-shadow: 0 0 50px rgba(255, 215, 0, 0.8);
+            opacity: 0;
+            animation: none;
+        }
+
+        .countdown.active {
+            animation: pulse 1s ease-in-out;
+        }
+
+        @keyframes pulse {
+            0% {
+                transform: translate(-50%, -50%) scale(0.5);
+                opacity: 0;
+            }
+
+            50% {
+                transform: translate(-50%, -50%) scale(1.2);
+                opacity: 1;
+            }
+
+            100% {
+                transform: translate(-50%, -50%) scale(1);
+                opacity: 0;
+            }
+        }
+
+        /* 结果提示 */
+        .result-banner {
+            position: absolute;
+            top: 35%;
+            left: 50%;
+            transform: translate(-50%, -50%) scale(0);
+            font-size: 64px;
+            font-weight: 700;
+            padding: 20px 60px;
+            border-radius: 20px;
+            transition: transform 0.5s cubic-bezier(0.68, -0.55, 0.265, 1.55);
+        }
+
+        .result-banner.show {
+            transform: translate(-50%, -50%) scale(1);
+        }
+
+        .result-banner.win {
+            background: linear-gradient(135deg, #00ff88, #00cc6a);
+            color: #000;
+            box-shadow: 0 0 60px rgba(0, 255, 136, 0.6);
+        }
+
+        .result-banner.lose {
+            background: linear-gradient(135deg, #ff4466, #cc3355);
+            color: #fff;
+            box-shadow: 0 0 60px rgba(255, 68, 102, 0.6);
+        }
+
+        .result-banner.draw {
+            background: linear-gradient(135deg, #4488ff, #3366cc);
+            color: #fff;
+            box-shadow: 0 0 60px rgba(68, 136, 255, 0.6);
+        }
+
+        /* 开始按钮 */
+        .start-btn {
+            position: absolute;
+            bottom: 100px;
+            left: 50%;
+            transform: translateX(-50%);
+            padding: 20px 60px;
+            font-size: 24px;
+            font-weight: 700;
+            border: none;
+            border-radius: 50px;
+            background: linear-gradient(135deg, #ffd700, #ffaa00);
+            color: #000;
+            cursor: pointer;
+            pointer-events: auto;
+            transition: all 0.3s ease;
+            box-shadow: 0 0 30px rgba(255, 215, 0, 0.5);
+            z-index: 20;
+        }
+
+        .start-btn:hover {
+            transform: translateX(-50%) scale(1.1);
+            box-shadow: 0 0 50px rgba(255, 215, 0, 0.8);
+        }
+
+        .start-btn:disabled {
+            opacity: 0.5;
+            cursor: not-allowed;
+            transform: translateX(-50%);
+        }
+
+        /* 手势提示 */
+        .gesture-hints {
+            position: absolute;
+            bottom: 20px;
+            left: 20px;
+            display: flex;
+            gap: 15px;
+            gap: 15px;
+            pointer-events: auto;
+            z-index: 20;
+        }
+
+        .hint {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            gap: 5px;
+            background: rgba(0, 0, 0, 0.7);
+            padding: 10px 15px;
+            border-radius: 15px;
+            backdrop-filter: blur(10px);
+            border: 1px solid rgba(255, 255, 255, 0.1);
+            transition: transform 0.3s ease;
+        }
+
+        .hint:hover {
+            transform: translateY(-5px);
+        }
+
+        .hint-emoji {
+            font-size: 36px;
+        }
+
+        .hint-name {
+            font-size: 14px;
+            font-weight: 600;
+        }
+
+        /* 当前检测手势 */
+        .detected-gesture {
+            position: absolute;
+            bottom: 120px;
+            left: 20px;
+            background: rgba(0, 0, 0, 0.7);
+            padding: 15px 25px;
+            border-radius: 15px;
+            backdrop-filter: blur(10px);
+            border: 2px solid #00ff88;
+            border: 2px solid #00ff88;
+            display: flex;
+            align-items: center;
+            gap: 15px;
+            z-index: 20;
+        }
+
+        .detected-gesture .emoji {
+            font-size: 48px;
+        }
+
+        .detected-gesture .text {
+            font-size: 18px;
+        }
+
+        .detected-gesture .label {
+            opacity: 0.7;
+            font-size: 14px;
+        }
+
+        /* 奖励弹窗 */
+        .reward-popup {
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%) scale(0);
+            background: linear-gradient(135deg, #ffd700, #ffaa00);
+            color: #000;
+            padding: 30px 50px;
+            border-radius: 25px;
+            text-align: center;
+            z-index: 100;
+            transition: transform 0.5s cubic-bezier(0.68, -0.55, 0.265, 1.55);
+        }
+
+        .reward-popup.show {
+            transform: translate(-50%, -50%) scale(1);
+        }
+
+        .reward-popup h2 {
+            font-size: 32px;
+            margin-bottom: 10px;
+        }
+
+        .reward-popup p {
+            font-size: 48px;
+            font-weight: 700;
+        }
+
+        /* 连胜指示器 */
+        .streak-indicator {
+            position: absolute;
+            top: 100px;
+            left: 50%;
+            transform: translateX(-50%);
+            background: linear-gradient(135deg, #ff6b35, #f7931e);
+            padding: 10px 30px;
+            border-radius: 30px;
+            font-size: 18px;
+            font-weight: 600;
+            display: none;
+        }
+
+        .streak-indicator.show {
+            display: block;
+            animation: bounce 0.5s ease;
+        }
+
+        @keyframes bounce {
+
+            0%,
+            100% {
+                transform: translateX(-50%) translateY(0);
+            }
+
+            50% {
+                transform: translateX(-50%) translateY(-10px);
+            }
+        }
+
+        /* 加载指示器 */
+        .loading {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: rgba(0, 0, 0, 0.95);
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+            align-items: center;
+            z-index: 100;
+        }
+
+        .loading.hidden {
+            display: none;
+        }
+
+        .spinner {
+            width: 60px;
+            height: 60px;
+            border: 5px solid rgba(255, 255, 255, 0.2);
+            border-radius: 50%;
+            border-top: 5px solid #ffd700;
+            animation: spin 1s linear infinite;
+            margin-bottom: 20px;
+        }
+
+        @keyframes spin {
+            0% {
+                transform: rotate(0deg);
+            }
+
+            100% {
+                transform: rotate(360deg);
+            }
+        }
+
+        .loading p {
+            font-size: 18px;
+            opacity: 0.8;
+        }
+
+        /* 屏幕震动效果 */
+        @keyframes shake {
+
+            0%,
+            100% {
+                transform: translateX(0);
+            }
+
+            10%,
+            30%,
+            50%,
+            70%,
+            90% {
+                transform: translateX(-10px);
+            }
+
+            20%,
+            40%,
+            60%,
+            80% {
+                transform: translateX(10px);
+            }
+        }
+
+        .shake {
+            animation: shake 0.5s cubic-bezier(.36, .07, .19, .97) both;
+        }
+
+        .shake {
+            animation: shake 0.5s cubic-bezier(.36, .07, .19, .97) both;
+        }
+
+        /* 排行榜 */
+        .leaderboard-btn {
+            position: absolute;
+            top: 100px;
+            right: 20px;
+            padding: 10px 20px;
+            background: rgba(0, 0, 0, 0.6);
+            border: 2px solid #ffd700;
+            color: #ffd700;
+            border-radius: 20px;
+            cursor: pointer;
+            z-index: 1000;
+            transition: all 0.3s;
+            font-weight: bold;
+        }
+
+        .leaderboard-btn:hover {
+            background: #ffd700;
+            color: #000;
+            box-shadow: 0 0 20px rgba(255, 215, 0, 0.4);
+        }
+
+        .leaderboard-panel {
+            position: fixed;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%) scale(0.9);
+            width: 90%;
+            max-width: 450px;
+            background: rgba(15, 15, 25, 0.95);
+            border: 2px solid #00ff88;
+            border-radius: 20px;
+            padding: 30px;
+            z-index: 10005;
+            opacity: 0;
+            visibility: hidden;
+            transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+            backdrop-filter: blur(20px);
+            color: white;
+            box-shadow: 0 0 50px rgba(0, 0, 0, 0.5);
+        }
+
+        .leaderboard-panel.show {
+            opacity: 1;
+            visibility: visible;
+            transform: translate(-50%, -50%) scale(1);
+        }
+
+        .leaderboard-title {
+            font-size: 32px;
+            color: #00ff88;
+            text-align: center;
+            margin-bottom: 25px;
+            text-shadow: 0 0 10px rgba(0, 255, 136, 0.5);
+            font-weight: bold;
+        }
+
+        .rank-list {
+            max-height: 450px;
+            overflow-y: auto;
+            margin-bottom: 25px;
+            padding-right: 5px;
+        }
+
+        .rank-list::-webkit-scrollbar {
+            width: 6px;
+        }
+
+        .rank-list::-webkit-scrollbar-thumb {
+            background: rgba(0, 255, 136, 0.3);
+            border-radius: 3px;
+        }
+
+        .rank-item {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: 15px;
+            background: rgba(255, 255, 255, 0.05);
+            margin-bottom: 12px;
+            border-radius: 12px;
+            border: 1px solid rgba(255, 255, 255, 0.1);
+            transition: all 0.2s;
+        }
+
+        .rank-item:hover {
+            transform: translateX(5px);
+            background: rgba(0, 255, 136, 0.1);
+            border-color: rgba(0, 255, 136, 0.3);
+        }
+
+        .rank-info {
+            display: flex;
+            align-items: center;
+            gap: 15px;
+        }
+
+        .rank-pos {
+            font-weight: bold;
+            font-size: 22px;
+            width: 40px;
+            height: 40px;
+            background: rgba(0, 255, 136, 0.2);
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            color: #00ff88;
+        }
+
+        .rank-score-details {
+            display: flex;
+            flex-direction: column;
+        }
+
+        .rank-score {
+            color: #ffd700;
+            font-size: 22px;
+            font-weight: bold;
+        }
+
+        .rank-date {
+            color: #888;
+            font-size: 12px;
+            margin-top: 4px;
+        }
+
+        .close-btn {
+            display: block;
+            width: 100%;
+            padding: 15px;
+            background: linear-gradient(135deg, #ff4466, #ff2244);
+            color: white;
+            border: none;
+            border-radius: 12px;
+            cursor: pointer;
+            font-weight: bold;
+            font-size: 18px;
+            transition: all 0.3s;
+            box-shadow: 0 5px 15px rgba(255, 68, 102, 0.3);
+        }
+
+        .close-btn:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 8px 20px rgba(255, 68, 102, 0.4);
+        }
+
+        /* 屏幕闪光 */
+        @keyframes flash {
+            0% {
+                background-color: rgba(255, 255, 255, 0.8);
+            }
+
+            100% {
+                background-color: transparent;
+            }
+        }
+
+        .flash-effect {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100vw;
+            height: 100vh;
+            pointer-events: none;
+            z-index: 200;
+            animation: flash 0.3s ease-out;
+        }
+
+        /* 速度模式 */
+        .speed-mode {
+            animation: container-glow 2s infinite alternate;
+        }
+
+        @keyframes container-glow {
+            from {
+                box-shadow: inset 0 0 50px rgba(255, 0, 0, 0.1);
+            }
+
+            to {
+                box-shadow: inset 0 0 150px rgba(255, 215, 0, 0.3);
+            }
+        }
+
+        .speed-mode #battleArea {
+            filter: drop-shadow(0 0 20px #ffd700);
+        }
+
+        /* 倒计时心跳 */
+        @keyframes heartbeat {
+            0% {
+                transform: translate(-50%, -50%) scale(1);
+                opacity: 0.8;
+            }
+
+            15% {
+                transform: translate(-50%, -50%) scale(1.3);
+                opacity: 1;
+            }
+
+            30% {
+                transform: translate(-50%, -50%) scale(1);
+                opacity: 0.8;
+            }
+
+            45% {
+                transform: translate(-50%, -50%) scale(1.15);
+                opacity: 1;
+            }
+
+            100% {
+                transform: translate(-50%, -50%) scale(1);
+                opacity: 0;
+            }
+        }
+
+        .countdown.heartbeat {
+            animation: heartbeat 0.8s ease-in-out;
+            color: #ff4466;
+            /* 红色心跳 */
+            text-shadow: 0 0 50px rgba(255, 68, 102, 0.8);
+        }
+
+        /* 紧张遮罩 */
+        .tension-overlay {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: radial-gradient(circle, transparent 20%, rgba(0, 0, 0, 0.8) 90%);
+            z-index: 5;
+            opacity: 0;
+            transition: opacity 0.5s;
+            pointer-events: none;
+        }
+
+        .tension-overlay.active {
+            opacity: 1;
+        }
+    </style>
+</head>
+
+<body>
+    <div class="container" id="container">
+        <!-- 摄像头视频 -->
+        <!-- 摄像头视频 -->
+        <video id="camera" autoplay playsinline></video>
+
+        <!-- 手部追踪画布 -->
+        <canvas id="handCanvas"></canvas>
+
+        <!-- 粒子效果画布 -->
+        <canvas id="effectCanvas"></canvas>
+
+        <!-- 紧张遮罩 (Suspense Overlay) -->
+        <div class="tension-overlay" id="tensionOverlay"></div>
+
+        <!-- 计分板 -->
+        <div class="scoreboard">
+            <div class="score-item">
+                <div class="score-label">你</div>
+                <div class="score-value player" id="playerScore">0</div>
+            </div>
+            <div class="score-item">
+                <div class="score-label">积分</div>
+                <div class="score-value points" id="totalPoints">0</div>
+            </div>
+            <div class="score-item">
+                <div class="score-label">电脑</div>
+                <div class="score-value computer" id="computerScore">0</div>
+            </div>
+            <div class="score-item">
+                <div class="score-label">难度</div>
+                <div class="score-value level" id="levelDisplay">1</div>
+            </div>
+        </div>
+
+        <!-- 排行榜按钮 -->
+        <div class="leaderboard-btn" id="openLeaderboard">🏆 排行榜</div>
+
+        <!-- 排行榜面板 -->
+        <div class="leaderboard-panel" id="leaderboardPanel">
+            <div class="leaderboard-title">🏆 荣誉殿堂</div>
+            <div class="rank-list" id="rankList">
+                <!-- 动态生成 -->
+                <div style="text-align:center; padding: 20px; color: #888;">暂无记录</div>
+            </div>
+            <button class="close-btn" id="closeLeaderboard">确认</button>
+        </div>
+
+        <!-- 连胜指示器 -->
+        <div class="streak-indicator" id="streakIndicator">🔥 连胜 <span id="streakCount">0</span> 局!</div>
+
+        <!-- 战斗区域 -->
+        <div class="battle-area" id="battleArea" style="display: none;">
+            <div class="gesture-group" id="playerGesturesArea">
+                <div class="gesture-display player">
+                    <div class="gesture-emoji" id="playerGestureEmoji">❓</div>
+                    <div class="gesture-name" id="playerGestureName">等待...</div>
+                </div>
+            </div>
+            <div class="vs-text">VS</div>
+            <div class="gesture-group" id="computerGesturesArea">
+                <div class="gesture-display computer">
+                    <div class="gesture-emoji" id="computerGestureEmoji">❓</div>
+                    <div class="gesture-name" id="computerGestureName">等待...</div>
+                </div>
+            </div>
+        </div>
+
+        <!-- 倒计时 -->
+        <div class="countdown" id="countdown">3</div>
+
+        <!-- 结果提示 -->
+        <div class="result-banner" id="resultBanner"></div>
+
+        <!-- 开始按钮 -->
+        <button class="start-btn" id="startBtn">🎮 开始游戏</button>
+
+        <!-- 当前检测手势 -->
+        <div class="detected-gesture" id="detectedGesture">
+            <div class="emoji" id="detectedEmoji">✋</div>
+            <div>
+                <div class="label">检测到的手势</div>
+                <div class="text" id="detectedName">无</div>
+            </div>
+        </div>
+
+        <!-- 手势提示 -->
+        <div class="gesture-hints">
+            <div class="hint">
+                <div class="hint-emoji">✊</div>
+                <div class="hint-name">石头</div>
+            </div>
+            <div class="hint">
+                <div class="hint-emoji">✌️</div>
+                <div class="hint-name">剪刀</div>
+            </div>
+            <div class="hint">
+                <div class="hint-emoji">🖐️</div>
+                <div class="hint-name">布</div>
+            </div>
+        </div>
+
+        <!-- 奖励弹窗 -->
+        <div class="reward-popup" id="rewardPopup">
+            <h2>🎉 奖励!</h2>
+            <p id="rewardPoints">+50</p>
+        </div>
+    </div>
+
+    <!-- 加载指示器 -->
+    <div class="loading" id="loading">
+        <div class="spinner"></div>
+        <p>正在加载摄像头和手势识别...</p>
+    </div>
+    </div>
+
+    <script src="https://cdn.jsdelivr.net/npm/@mediapipe/hands@0.4.1675469240/hands.min.js"
+        crossorigin="anonymous"></script>
+    <script src="https://cdn.jsdelivr.net/npm/@mediapipe/face_mesh@0.4.1633559619/face_mesh.min.js"
+        crossorigin="anonymous"></script>
+    <script src="https://cdn.jsdelivr.net/npm/@mediapipe/camera_utils@0.3.1675466862/camera_utils.min.js"
+        crossorigin="anonymous"></script>
+    <script src="https://cdn.jsdelivr.net/npm/@mediapipe/drawing_utils@0.3.1675466124/drawing_utils.min.js"
+        crossorigin="anonymous"></script>
+
+
+    <script>
+        // DOM元素
+        const cameraElement = document.getElementById('camera');
+        const handCanvas = document.getElementById('handCanvas');
+        const effectCanvas = document.getElementById('effectCanvas');
+
+        const handCtx = handCanvas.getContext('2d');
+        const effectCtx = effectCanvas.getContext('2d');
+        const loadingElement = document.getElementById('loading');
+        const startBtn = document.getElementById('startBtn');
+        const countdownElement = document.getElementById('countdown');
+        const battleArea = document.getElementById('battleArea');
+        const resultBanner = document.getElementById('resultBanner');
+        const streakIndicator = document.getElementById('streakIndicator');
+        const rewardPopup = document.getElementById('rewardPopup');
+        const containerElement = document.getElementById('container');
+
+        // 游戏状态
+        let gameState = 'idle'; // idle, countdown, playing, result
+        let playerScore = 0;
+        let computerScore = 0;
+        let totalPoints = 0;
+        let currentStreak = 0; // Win streak
+        let loseStreak = 0; // Lose streak
+        let currentLevel = 1;
+        let detectedGesture = 'none';
+        let detectedGestures = []; // Array of gestures for multi-hand
+        let particles = [];
+        let faceResults = null; // Store face mesh results for mask drawing
+        let faceEffect = 'normal'; // normal, glow, sweat, red, cyan, car
+        let rainParticles = [];
+        let isRainy = false;
+        let thunderIntensity = 0;
+        let darkness = 0; // 0 to 1
+        let isGameOver = false;
+
+
+        // 手势映射
+        const gestureMap = {
+            rock: { emoji: '✊', name: '石头', cn: '石头' },
+            scissors: { emoji: '✌️', name: '剪刀', cn: '剪刀' },
+            paper: { emoji: '🖐️', name: '布', cn: '布' },
+            none: { emoji: '❓', name: '无', cn: '无' }
+        };
+
+        // 声音管理器
+        class SoundManager {
+            constructor() {
+                this.ctx = new (window.AudioContext || window.webkitAudioContext)();
+                this.masterGain = this.ctx.createGain();
+                this.masterGain.gain.value = 0.3; // 默认音量
+                this.masterGain.connect(this.ctx.destination);
+                this.enabled = true;
+
+                // Rhythm state
+                this.bpm = 100;
+                this.nextNoteTime = 0;
+                this.timerID = null;
+                this.isPlayingRhythm = false;
+            }
+
+            // --- Drum Synthesis ---
+            playKick(time) {
+                if (!this.enabled) return;
+                const osc = this.ctx.createOscillator();
+                const gain = this.ctx.createGain();
+                osc.frequency.setValueAtTime(150, time);
+                osc.frequency.exponentialRampToValueAtTime(0.01, time + 0.5);
+                gain.gain.setValueAtTime(0.5, time);
+                gain.gain.exponentialRampToValueAtTime(0.01, time + 0.5);
+                osc.connect(gain);
+                gain.connect(this.masterGain);
+                osc.start(time);
+                osc.stop(time + 0.5);
+            }
+
+            playSnare(time) {
+                if (!this.enabled) return;
+                const noise = this.ctx.createBufferSource();
+                const bufferSize = this.ctx.sampleRate * 0.1;
+                const buffer = this.ctx.createBuffer(1, bufferSize, this.ctx.sampleRate);
+                const data = buffer.getChannelData(0);
+                for (let i = 0; i < bufferSize; i++) data[i] = Math.random() * 2 - 1;
+                noise.buffer = buffer;
+
+                const noiseFilter = this.ctx.createBiquadFilter();
+                noiseFilter.type = 'highpass';
+                noiseFilter.frequency.value = 1000;
+                noise.connect(noiseFilter);
+
+                const noiseGain = this.ctx.createGain();
+                noiseGain.gain.setValueAtTime(0.3, time);
+                noiseGain.gain.exponentialRampToValueAtTime(0.01, time + 0.1);
+                noiseFilter.connect(noiseGain);
+                noiseGain.connect(this.masterGain);
+
+                noise.start(time);
+                noise.stop(time + 0.1);
+            }
+
+            // --- Rhythm Engine ---
+            startRhythm() {
+                if (this.isPlayingRhythm) return;
+                this.isPlayingRhythm = true;
+                this.nextNoteTime = this.ctx.currentTime;
+                this.scheduler();
+            }
+
+            stopRhythm() {
+                this.isPlayingRhythm = false;
+                clearTimeout(this.timerID);
+            }
+
+            updateBpm(score) {
+                // Base 110, goes up to 220 as score reaches 500
+                this.bpm = Math.min(220, 110 + (score / 5));
+            }
+
+            scheduler() {
+                while (this.nextNoteTime < this.ctx.currentTime + 0.1) {
+                    this.scheduleNextNote(this.nextNoteTime);
+                    this.nextNoteTime += 60.0 / this.bpm / 2; // 8th notes
+                }
+                if (this.isPlayingRhythm) {
+                    this.timerID = setTimeout(() => this.scheduler(), 25);
+                }
+            }
+
+            scheduleNextNote(time) {
+                const beat = Math.floor(time * (this.bpm / 60) * 2) % 8;
+                if (beat === 0 || beat === 4) this.playKick(time);
+                if (beat === 2 || beat === 6) this.playSnare(time);
+            }
+
+            // 播放振荡器声音
+            playTone(freq, type, duration, startTime = 0) {
+                if (!this.enabled) return;
+                const osc = this.ctx.createOscillator();
+                const gain = this.ctx.createGain();
+
+                osc.type = type;
+                osc.frequency.setValueAtTime(freq, this.ctx.currentTime + startTime);
+
+                gain.gain.setValueAtTime(0.5, this.ctx.currentTime + startTime);
+                gain.gain.exponentialRampToValueAtTime(0.01, this.ctx.currentTime + startTime + duration);
+
+                osc.connect(gain);
+                gain.connect(this.masterGain);
+
+                osc.start(this.ctx.currentTime + startTime);
+                osc.stop(this.ctx.currentTime + startTime + duration);
+            }
+
+            playCountdown() {
+                // Revert to classic beep
+                this.playTone(800, 'sine', 0.1);
+            }
+
+            playTension() {
+                // Remove tension sound or make very subtle
+            }
+
+            playStart() {
+                // 爆发声
+                this.playTone(1200, 'square', 0.1);
+                this.playTone(800, 'sawtooth', 0.3);
+            }
+
+            playWin() {
+                const now = 0;
+                this.playTone(523.25, 'triangle', 0.2, now);       // C5
+                this.playTone(659.25, 'triangle', 0.2, now + 0.1); // E5
+                this.playTone(783.99, 'triangle', 0.4, now + 0.2); // G5
+                this.playTone(1046.50, 'triangle', 0.6, now + 0.3); // C6
+            }
+
+            playLose() {
+                const now = 0;
+                this.playTone(392.00, 'sawtooth', 0.3, now);       // G4
+                this.playTone(369.99, 'sawtooth', 0.3, now + 0.2); // F#4
+                this.playTone(349.23, 'sawtooth', 0.3, now + 0.4); // F4
+                this.playTone(200.00, 'sawtooth', 0.8, now + 0.6); // Low
+            }
+
+            playDraw() {
+                this.playTone(440, 'sine', 0.1, 0);
+                this.playTone(440, 'sine', 0.1, 0.15);
+            }
+
+            resume() {
+                if (this.ctx.state === 'suspended') {
+                    this.ctx.resume();
+                }
+            }
+        }
+
+        const soundManager = new SoundManager();
+
+        // 粒子类 - 升级版
+        class Particle {
+            constructor(x, y, color, type = 'circle') { // type: circle, square, triangle
+                this.x = x;
+                this.y = y;
+                this.vx = (Math.random() - 0.5) * 15;
+                this.vy = (Math.random() - 0.5) * 15 - 5;
+                this.life = 60 + Math.random() * 40;
+                this.maxLife = this.life;
+                this.color = color;
+                this.size = Math.random() * 8 + 4;
+                this.rotation = Math.random() * Math.PI * 2;
+                this.rotationSpeed = (Math.random() - 0.5) * 0.2;
+                this.type = type;
+
+                // 物理特性
+                if (type === 'square') { // 石头: 重力大
+                    this.gravity = 0.4;
+                    this.drag = 0.95;
+                } else if (type === 'triangle') { // 剪刀: 速度快
+                    this.gravity = 0.2;
+                    this.drag = 0.98;
+                    this.vx *= 1.5;
+                    this.vy *= 1.5;
+                } else { // 布: 漂浮
+                    this.gravity = 0.1;
+                    this.drag = 0.94;
+                    this.vx *= 0.8;
+                }
+            }
+
+            update() {
+                this.x += this.vx;
+                this.y += this.vy;
+                this.vy += this.gravity;
+                this.rotation += this.rotationSpeed;
+                this.life--;
+                this.vx *= this.drag;
+                this.vy *= this.drag;
+            }
+
+            draw(ctx) {
+                if (this.life <= 0) return;
+                const alpha = this.life / this.maxLife;
+                ctx.save();
+                ctx.globalAlpha = alpha;
+                ctx.translate(this.x, this.y);
+                ctx.rotate(this.rotation);
+
+                ctx.fillStyle = this.color;
+
+                if (this.type === 'square') {
+                    ctx.fillRect(-this.size, -this.size, this.size * 2, this.size * 2);
+                } else if (this.type === 'triangle') {
+                    ctx.beginPath();
+                    ctx.moveTo(0, -this.size);
+                    ctx.lineTo(this.size, this.size);
+                    ctx.lineTo(-this.size, this.size);
+                    ctx.closePath();
+                    ctx.fill();
+                } else {
+                    ctx.beginPath();
+                    ctx.arc(0, 0, this.size, 0, Math.PI * 2);
+                    ctx.fill();
+                }
+
+                ctx.restore();
+            }
+
+            isAlive() {
+                return this.life > 0;
+            }
+        }
+
+        // 创建胜利粒子效果
+        function createWinParticles(gesture) {
+            const centerX = effectCanvas.width / 2;
+            const centerY = effectCanvas.height / 2;
+
+            let colors, type;
+            if (gesture === 'rock') {
+                colors = ['#ff6b35', '#f7931e', '#808080'];
+                type = 'square';
+            } else if (gesture === 'scissors') {
+                colors = ['#ff4466', '#ffcc00', '#ffffff'];
+                type = 'triangle';
+            } else { // paper
+                colors = ['#00ff88', '#00cc6a', '#4488ff'];
+                type = 'circle';
+            }
+
+            for (let i = 0; i < 150; i++) {
+                const color = colors[Math.floor(Math.random() * colors.length)];
+                particles.push(new Particle(centerX, centerY, color, type));
+            }
+        }
+
+        // 创建失败效果
+        function createLoseEffect() {
+            containerElement.classList.add('shake');
+            setTimeout(() => containerElement.classList.remove('shake'), 300);
+        }
+
+        // 创建平局效果
+        function createDrawParticles() {
+            const centerX = effectCanvas.width / 2;
+            const centerY = effectCanvas.height / 2;
+            const colors = ['#4488ff', '#3366cc', '#88aaff'];
+
+            for (let i = 0; i < 50; i++) {
+                const angle = (i / 50) * Math.PI * 2;
+                const x = centerX + Math.cos(angle) * 100;
+                const y = centerY + Math.sin(angle) * 100;
+                const color = colors[Math.floor(Math.random() * colors.length)];
+                particles.push(new Particle(x, y, color, 'circle'));
+            }
+        }
+
+        // 更新粒子
+        function updateParticles() {
+            for (let i = particles.length - 1; i >= 0; i--) {
+                particles[i].update();
+                if (!particles[i].isAlive()) {
+                    particles.splice(i, 1);
+                }
+            }
+        }
+
+        // 绘制粒子
+        function drawParticles() {
+            effectCtx.clearRect(0, 0, effectCanvas.width, effectCanvas.height);
+            particles.forEach(p => p.draw(effectCtx));
+        }
+
+        // 识别手势
+        function recognizeGesture(landmarks) {
+            if (!landmarks) return 'none';
+
+            // 手指关键点
+            const thumbTip = landmarks[4];
+            const thumbIP = landmarks[3];
+            const indexTip = landmarks[8];
+            const indexPIP = landmarks[6];
+            const middleTip = landmarks[12];
+            const middlePIP = landmarks[10];
+            const ringTip = landmarks[16];
+            const ringPIP = landmarks[14];
+            const pinkyTip = landmarks[20];
+            const pinkyPIP = landmarks[18];
+            const wrist = landmarks[0];
+
+            // 检测手指是否伸直
+            const isIndexExtended = indexTip.y < indexPIP.y;
+            const isMiddleExtended = middleTip.y < middlePIP.y;
+            const isRingExtended = ringTip.y < ringPIP.y;
+            const isPinkyExtended = pinkyTip.y < pinkyPIP.y;
+
+            // 拇指检测 (水平方向)
+            const isThumbExtended = Math.abs(thumbTip.x - wrist.x) > Math.abs(thumbIP.x - wrist.x);
+
+            // 计算伸直手指数量
+            const extendedCount = [isIndexExtended, isMiddleExtended, isRingExtended, isPinkyExtended]
+                .filter(Boolean).length;
+
+            // 石头: 所有手指弯曲 (握拳)
+            if (extendedCount === 0 && !isThumbExtended) {
+                return 'rock';
+            }
+
+            // 赞/重开: 拇指伸直 (y比ip高) 且 其他手指弯曲 (或者简单判断拇指向上)
+            // 简化版赞: 拇指指尖 < 拇指关节 (Y轴向上) 且 食指指尖 > 食指关节 (Y轴向下/弯曲)
+            if (thumbTip.y < thumbIP.y && indexTip.y > indexPIP.y) {
+                return 'thumbs_up';
+            }
+
+            // 原来的水平赞检测备用
+            if (extendedCount === 0 && isThumbExtended) {
+                return 'thumbs_up';
+            }
+
+            // 剪刀: 只有食指和中指伸直
+            if (isIndexExtended && isMiddleExtended && !isRingExtended && !isPinkyExtended) {
+                return 'scissors';
+            }
+
+            // 布: 所有手指伸直
+            if (extendedCount >= 4) {
+                return 'paper';
+            }
+
+            // 另一种石头检测: 手指都弯曲
+            if (extendedCount <= 1 && !isThumbExtended) {
+                return 'rock';
+            }
+
+            return 'none';
+        }
+
+        // 判定胜负
+        function determineWinner(player, computer) {
+            if (player === computer) return 'draw';
+            if (
+                (player === 'rock' && computer === 'scissors') ||
+                (player === 'scissors' && computer === 'paper') ||
+                (player === 'paper' && computer === 'rock')
+            ) {
+                return 'win';
+            }
+            return 'lose';
+        }
+
+        // 电脑出拳
+        function getComputerChoice() {
+            const choices = ['rock', 'scissors', 'paper'];
+            return choices[Math.floor(Math.random() * choices.length)];
+        }
+
+        // 判定单手胜负
+        function getSingleResult(p, c) {
+            if (p === c) return 'draw';
+            if ((p === 'rock' && c === 'scissors') ||
+                (p === 'scissors' && c === 'paper') ||
+                (p === 'paper' && c === 'rock')) return 'win';
+            return 'lose';
+        }
+
+        // 更新战斗区域UI
+        function updateBattleUI(level) {
+            const playerArea = document.getElementById('playerGesturesArea');
+            const computerArea = document.getElementById('computerGesturesArea');
+            const count = level >= 2 ? 2 : 1;
+
+            // 检查是否需要重建: 数量不符 OR ID缺失 (修复初始HTML无ID的问题)
+            const firstP = playerArea.firstElementChild;
+            const needsBuild = playerArea.children.length !== count || (firstP && !firstP.id);
+
+            if (needsBuild) {
+                playerArea.innerHTML = '';
+                computerArea.innerHTML = '';
+                for (let i = 0; i < count; i++) {
+                    playerArea.innerHTML += `
+                        <div class="gesture-display player" id="p_gesture_${i}">
+                            <div class="gesture-emoji">❓</div>
+                            <div class="gesture-name">等待...</div>
+                        </div>`;
+                    computerArea.innerHTML += `
+                        <div class="gesture-display computer" id="c_gesture_${i}">
+                            <div class="gesture-emoji">❓</div>
+                            <div class="gesture-name">等待...</div>
+                        </div>`;
+                }
+            }
+        }
+
+        // ------------------ 动态背景 ------------------
+
+
+        // ------------------ 面部 AR ------------------
+
+
+        // 显示结果
+        function showResult(result, playerChoice) { // 添加 playerChoice 参数
+            resultBanner.className = 'result-banner show ' + result;
+
+            if (result === 'win') {
+                resultBanner.textContent = '🎉 你赢了!';
+                soundManager.playWin();
+                createWinParticles(playerChoice); // 传入玩家手势
+            } else if (result === 'lose') {
+                resultBanner.textContent = '😢 你输了';
+                soundManager.playLose();
+                createLoseEffect();
+            } else {
+                resultBanner.textContent = '🤝 平局';
+                soundManager.playDraw();
+                createDrawParticles();
+            }
+
+            // Dynamic duration for result banner (faster as score increases)
+            const bannerDuration = Math.max(800, 2000 - (totalPoints * 2));
+            setTimeout(() => {
+                resultBanner.classList.remove('show');
+            }, bannerDuration);
+        }
+
+        // 显示奖励
+        function showReward(points, message = null) {
+            const rewardPoints = document.getElementById('rewardPoints');
+            rewardPoints.textContent = message || `+${points}`;
+            rewardPopup.classList.add('show');
+
+            setTimeout(() => {
+                rewardPopup.classList.remove('show');
+            }, 1500);
+        }
+
+        // 更新连胜显示
+        function updateStreak() {
+            const streakCount = document.getElementById('streakCount');
+            streakCount.textContent = currentStreak;
+
+            if (currentStreak >= 2) {
+                streakIndicator.classList.add('show');
+            } else {
+                streakIndicator.classList.remove('show');
+            }
+        }
+
+        // 更新分数显示
+        function updateScoreDisplay() {
+            document.getElementById('playerScore').textContent = playerScore;
+            document.getElementById('computerScore').textContent = computerScore;
+            document.getElementById('totalPoints').textContent = totalPoints;
+        }
+
+        // 计算并给予奖励
+        function giveReward(result) {
+            let points = 0;
+            let showBonus = false;
+            let bonusMessage = '';
+
+            if (result === 'win') {
+                points = 10; // 基础胜利分数
+                playerScore++;
+                currentStreak++;
+                loseStreak = 0; // Reset lose streak
+
+                // Reset environmental effects on win
+                isRainy = false;
+                thunderIntensity = 0;
+                darkness = 0;
+
+                // 连胜效果
+                if (currentStreak >= 5) {
+                    faceEffect = 'car';
+                    if (currentLevel === 1) {
+                        currentLevel = 2; // 升级到双手!
+                        points += 200;
+                        showBonus = true;
+                        bonusMessage = '🏎️ 连胜5局! 升级双手模式!';
+                        soundManager.playStart();
+                    } else {
+                        points += 100 * currentLevel;
+                        showBonus = true;
+                        bonusMessage = '🏎️ 连胜5局! 跑车出场!';
+                    }
+                } else if (currentStreak >= 3) {
+                    faceEffect = 'glow';
+                    points += 50;
+                    showBonus = true;
+                    bonusMessage = '✨ 连胜3局! 发光!';
+                } else {
+                    faceEffect = 'normal';
+                }
+            } else if (result === 'lose') {
+                computerScore++;
+                loseStreak++;
+                currentStreak = 0; // Reset win streak
+
+                // Environmental effects based on lose streak
+                if (loseStreak >= 3) isRainy = true;
+                if (loseStreak >= 5) thunderIntensity = 1;
+                if (loseStreak >= 7) {
+                    darkness = 1;
+                    isGameOver = true;
+                    soundManager.stopRhythm();
+                    checkGameOver();
+                }
+
+                // 连败效果
+                if (loseStreak >= 5) {
+                    faceEffect = 'cyan';
+                } else if (loseStreak >= 3) {
+                    faceEffect = 'red';
+                } else if (loseStreak >= 2) {
+                    faceEffect = 'sweat';
+                } else {
+                    faceEffect = 'normal';
+                }
+            } else {
+                // 平局 - 不重置连胜/连败
+                faceEffect = 'normal';
+            }
+
+            totalPoints += points;
+            updateStreak();
+            updateScoreDisplay();
+            soundManager.updateBpm(totalPoints);
+
+            // Speed Aura effect on container
+            if (totalPoints > 200) {
+                containerElement.classList.add('speed-mode');
+            } else {
+                containerElement.classList.remove('speed-mode');
+            }
+
+            // 更新等级显示
+            document.getElementById('levelDisplay').textContent = currentLevel;
+
+            if (showBonus) {
+                setTimeout(() => showReward(points, bonusMessage), 500);
+            }
+        }
+
+        // 开始游戏回合
+        async function startRound() {
+            debugLog(`Attempting to start round. Current State: ${gameState}`);
+            if (gameState !== 'idle') {
+                debugLog("Ignored: Game not idle.");
+                return;
+            }
+
+            try {
+                gameState = 'countdown';
+                startBtn.disabled = true;
+                startBtn.innerHTML = "⏳ 准备...";
+                battleArea.style.display = 'flex';
+
+                // 准备 UI
+                debugLog("Updating Battle UI...");
+                updateBattleUI(currentLevel);
+                const numHands = currentLevel >= 2 ? 2 : 1;
+
+                // 倒计时 (改为心跳风格)
+                debugLog("Starting Countdown...");
+
+                // Safe Audio Resume
+                try {
+                    soundManager.resume();
+                    debugLog("Audio Resumed.");
+                } catch (audioErr) {
+                    debugLog("Audio warning: " + audioErr.message);
+                }
+
+                // Calculate dynamic speed (faster as score increases)
+                // Base delay 800ms, decreases as points increase (min 300ms)
+                const countdownSpeed = Math.max(300, 800 - (totalPoints / 2));
+                // Base suspense 1000ms, decreases (min 400ms)
+                const suspenseSpeed = Math.max(400, 1000 - (totalPoints / 1.5));
+
+                for (let i = 3; i >= 1; i--) {
+                    countdownElement.textContent = i;
+                    soundManager.playCountdown();
+                    countdownElement.className = 'countdown heartbeat'; // Reset class
+                    void countdownElement.offsetWidth; // 触发重绘
+                    await new Promise(r => setTimeout(r, countdownSpeed));
+                }
+
+                // 显示"出拳!"
+                countdownElement.textContent = '出拳!';
+
+                // 捕捉当前手势
+                gameState = 'playing';
+
+                // 获取玩家手势
+                let playerChoices = [];
+                for (let i = 0; i < numHands; i++) {
+                    let gesture = detectedGestures[i];
+                    // 如果是None或ThumbsUp都视为Rock(默认),或者视为空
+                    if (!gesture || gesture === 'thumbs_up' || gesture === 'none') gesture = 'rock';
+                    playerChoices.push(gesture);
+                }
+
+                const computerChoices = [];
+                for (let i = 0; i < numHands; i++) computerChoices.push(getComputerChoice());
+
+                // 紧张时刻 (Suspense)
+                document.getElementById('tensionOverlay').classList.add('active');
+                soundManager.playTension();
+                countdownElement.style.opacity = '0'; // 隐藏"出拳"字样，专注手势
+
+                // Start rhythmic beat if not already
+                soundManager.startRhythm();
+                soundManager.updateBpm(totalPoints);
+
+                // 短暂延迟 (悬念)
+                await new Promise(r => setTimeout(r, suspenseSpeed));
+
+                // 揭晓时刻!
+                document.getElementById('tensionOverlay').classList.remove('active');
+                countdownElement.style.opacity = '1';
+                countdownElement.classList.remove('active'); // 清理
+                countdownElement.textContent = ''; // 清空
+
+                // 屏幕闪光
+                const flash = document.createElement('div');
+                flash.className = 'flash-effect';
+                document.body.appendChild(flash);
+                setTimeout(() => flash.remove(), 500);
+
+                soundManager.playStart(); // 冲击音效
+
+
+
+                // 更新显示
+                debugLog(`Updating display: Player=${playerChoices}, Computer=${computerChoices}`);
+                for (let i = 0; i < numHands; i++) {
+                    const pg = gestureMap[playerChoices[i]];
+                    const cg = gestureMap[computerChoices[i]];
+
+                    const pEl = document.getElementById(`p_gesture_${i}`);
+                    const cEl = document.getElementById(`c_gesture_${i}`);
+
+                    debugLog(`Element check: pEl=${!!pEl}, cEl=${!!cEl}`);
+
+                    if (pEl) {
+                        pEl.querySelector('.gesture-emoji').textContent = pg.emoji;
+                        pEl.querySelector('.gesture-name').textContent = pg.cn;
+                    } else {
+                        debugLog("ERROR: Player gesture element not found!");
+                    }
+                    if (cEl) {
+                        cEl.querySelector('.gesture-emoji').textContent = cg.emoji;
+                        cEl.querySelector('.gesture-name').textContent = cg.cn;
+                        debugLog(`Computer shows: ${cg.emoji} ${cg.cn}`);
+                    } else {
+                        debugLog("ERROR: Computer gesture element not found!");
+                    }
+                }
+
+                // 判定胜负 (综合)
+                let wins = 0;
+                let loses = 0;
+                for (let i = 0; i < numHands; i++) {
+                    const r = getSingleResult(playerChoices[i], computerChoices[i]);
+                    if (r === 'win') wins++;
+                    if (r === 'lose') loses++;
+                }
+
+                let result = 'draw';
+                if (wins > loses) result = 'win';
+                else if (loses > wins) result = 'lose';
+                // 平局 stays draw
+
+                if (result === 'win') {
+                    playerScore++;
+                } else if (result === 'lose') {
+                    computerScore++;
+                }
+
+                // 显示结果和奖励
+                gameState = 'result';
+                showResult(result, playerChoices[0]); // 传递主手势用于粒子
+                giveReward(result);
+
+                // 重置游戏状态
+                await new Promise(r => setTimeout(r, 2500));
+                gameState = 'idle';
+                startBtn.disabled = false;
+
+                // 隐藏战斗区域，显示提示
+                battleArea.style.display = 'none';
+                document.getElementById('detectedName').innerHTML = '请比赞 <span style="font-size:24px">👍</span>';
+            } catch (err) {
+                console.error("FATAL ERROR IN ROUND:", err);
+                debugLog("ROUND ERROR: " + err.message);
+                gameState = 'idle';
+                startBtn.disabled = false;
+                startBtn.innerHTML = "🎮 重试";
+                alert("游戏发生错误: " + err.message);
+            }
+        }
+
+        // 处理手部识别结果
+        function processHandResults(results) {
+            // 调整画布大小
+            handCanvas.width = cameraElement.videoWidth;
+            handCanvas.height = cameraElement.videoHeight;
+            effectCanvas.width = cameraElement.videoWidth;
+            effectCanvas.height = cameraElement.videoHeight;
+
+            // 清除画布
+            handCtx.clearRect(0, 0, handCanvas.width, handCanvas.height);
+            handCtx.save();
+            handCtx.scale(-1, 1);
+            handCtx.translate(-handCanvas.width, 0);
+
+            if (results.multiHandLandmarks && results.multiHandLandmarks.length > 0) {
+                // Reset counter on detection
+                if (emptyHandCount > 0) {
+                    debugLog(`Hand Detected! (After ${emptyHandCount} empty frames)`);
+                    emptyHandCount = 0;
+                }
+
+                detectedGestures = [];
+                for (const landmarks of results.multiHandLandmarks) {
+                    // 绘制手部骨架
+                    drawConnectors(handCtx, landmarks, HAND_CONNECTIONS, {
+                        color: '#00ff88',
+                        lineWidth: 3
+                    });
+                    drawLandmarks(handCtx, landmarks, {
+                        color: '#ffd700',
+                        lineWidth: 2,
+                        radius: 5
+                    });
+
+                    // 识别手势
+                    detectedGestures.push(recognizeGesture(landmarks));
+                }
+
+                // 主要手势 (第一个检测到的)
+                detectedGesture = detectedGestures[0];
+
+                // 更新检测显示 (如果有多个手势，显示第一个非none的，或者组合)
+                // 暂时只显示主要手势
+                const gesture = gestureMap[detectedGesture] || { emoji: '👍', name: '重开', cn: '重开' };
+                document.getElementById('detectedEmoji').textContent = gesture.emoji;
+                document.getElementById('detectedName').textContent = gesture.cn;
+
+                // 检测是否为重开手势
+                // 放宽条件: 只要检测到 thumb_up 即可
+                const isThumbsUp = detectedGestures.includes('thumbs_up');
+                if (isThumbsUp && gameState === 'idle') {
+                    // 添加视觉反馈
+                    const detectedNameEl = document.getElementById('detectedName');
+                    if (!window.thumbsUpTimer) {
+                        detectedNameEl.innerHTML = '即将开始... <span style="color:#00ff88">3</span>';
+                        let count = 3;
+
+                        window.thumbsUpTimer = setInterval(() => {
+                            count--;
+                            if (count > 0) {
+                                detectedNameEl.innerHTML = `即将开始... <span style="color:#00ff88">${count}</span>`;
+                            } else {
+                                clearInterval(window.thumbsUpTimer);
+                                window.thumbsUpTimer = null;
+                                startRound();
+                            }
+                        }, 500); // 0.5秒一跳，共1.5秒
+                    }
+                } else {
+                    if (window.thumbsUpTimer && !isThumbsUp) {
+                        clearInterval(window.thumbsUpTimer);
+                        window.thumbsUpTimer = null;
+                        document.getElementById('detectedName').innerHTML = '请比赞 <span style="font-size:24px">👍</span>';
+                    }
+                }
+
+            } else {
+                emptyHandCount++;
+                if (emptyHandCount % 100 === 0) {
+                    debugLog(`No Hand Detected (${emptyHandCount} frames) - Check Lighting?`);
+                }
+
+                detectedGesture = 'none';
+                document.getElementById('detectedEmoji').textContent = '✋';
+                document.getElementById('detectedName').textContent = '未检测到手';
+            }
+
+            handCtx.restore();
+
+            // 更新和绘制粒子
+            updateParticles();
+            drawParticles();
+        }
+
+        // 初始化 MediaPipe Hands
+        const hands = new Hands({
+            locateFile: (file) => {
+                return `https://cdn.jsdelivr.net/npm/@mediapipe/hands/${file}`;
+            }
+        });
+
+        hands.setOptions({
+            maxNumHands: 2, // 支持双手
+            modelComplexity: 1, // 提高精度
+            minDetectionConfidence: 0.5, // 降低阈值以提高灵敏度
+            minTrackingConfidence: 0.5
+        });
+
+        hands.onResults(processHandResults);
+
+        // 初始化 MediaPipe Face Mesh for mask
+        const faceMesh = new FaceMesh({
+            locateFile: (file) => {
+                return `https://cdn.jsdelivr.net/npm/@mediapipe/face_mesh/${file}`;
+            }
+        });
+
+        faceMesh.setOptions({
+            maxNumFaces: 1,
+            refineLandmarks: true,
+            minDetectionConfidence: 0.5,
+            minTrackingConfidence: 0.5
+        });
+
+        faceMesh.onResults((results) => {
+            faceResults = results;
+        });
+
+        // Draw face mask overlay with streak effects
+        let goldParticles = []; // For falling gold effect
+        let maskType = Math.floor(Math.random() * 4); // 0: Pixel, 1: Square, 2: Round, 3: Aviator
+
+        function drawFaceMask() {
+            if (!faceResults || !faceResults.multiFaceLandmarks || faceResults.multiFaceLandmarks.length === 0) {
+                return;
+            }
+
+            const landmarks = faceResults.multiFaceLandmarks[0];
+            const w = handCanvas.width;
+            const h = handCanvas.height;
+
+            handCtx.save();
+            handCtx.scale(-1, 1);
+            handCtx.translate(-w, 0);
+
+            const leftEye = landmarks[33];
+            const rightEye = landmarks[263];
+            const nose = landmarks[1];
+            const forehead = landmarks[10];
+            const chin = landmarks[152];
+            const leftMouth = landmarks[61];
+            const rightMouth = landmarks[291];
+
+            const lx = leftEye.x * w;
+            const ly = leftEye.y * h;
+            const rx = rightEye.x * w;
+            const ry = rightEye.y * h;
+            const nx = nose.x * w;
+            const ny = nose.y * h;
+            const fx = forehead.x * w;
+            const fy = forehead.y * h;
+
+            const eyeDist = Math.abs(rx - lx);
+            const faceWidth = eyeDist * 2.5;
+
+            // Apply effect based on faceEffect state
+            switch (faceEffect) {
+                case 'glow':
+                    // Crown effect (Win 3+)
+                    handCtx.font = `${eyeDist * 1.5}px Arial`;
+                    handCtx.fillText('👑', (lx + rx) / 2 - eyeDist * 0.75, fy - eyeDist * 0.3);
+                    // Sparkles around
+                    handCtx.font = '20px Arial';
+                    for (let i = 0; i < 5; i++) {
+                        const angle = (Date.now() / 500 + i * 1.2) % (Math.PI * 2);
+                        const sparkX = (lx + rx) / 2 + Math.cos(angle) * faceWidth * 0.6;
+                        const sparkY = fy - eyeDist * 0.5 + Math.sin(angle) * 20;
+                        handCtx.fillText('✨', sparkX, sparkY);
+                    }
+                    drawCoolGlasses(lx, ly, rx, ry, fx, fy, eyeDist);
+                    break;
+
+                case 'car':
+                    // Falling gold effect (Win 5+)
+                    // Add new gold particles
+                    if (Math.random() < 0.3) {
+                        goldParticles.push({
+                            x: Math.random() * w,
+                            y: -30,
+                            vy: 3 + Math.random() * 3,
+                            size: 20 + Math.random() * 20,
+                            emoji: ['💰', '🪙', '💎', '⭐'][Math.floor(Math.random() * 4)]
+                        });
+                    }
+                    // Draw and update gold particles
+                    handCtx.font = '30px Arial';
+                    for (let i = goldParticles.length - 1; i >= 0; i--) {
+                        const p = goldParticles[i];
+                        handCtx.font = `${p.size}px Arial`;
+                        handCtx.fillText(p.emoji, p.x, p.y);
+                        p.y += p.vy;
+                        if (p.y > h + 50) goldParticles.splice(i, 1);
+                    }
+                    // Crown on head
+                    handCtx.font = `${eyeDist * 2}px Arial`;
+                    handCtx.fillText('👑', (lx + rx) / 2 - eyeDist, fy - eyeDist * 0.5);
+                    drawCoolGlasses(lx, ly, rx, ry, fx, fy, eyeDist);
+                    break;
+
+                case 'sweat':
+                    // Sweat drops + worried eyes (Lose 2)
+                    handCtx.fillStyle = '#87CEEB';
+                    for (let i = 0; i < 4; i++) {
+                        const dropX = fx + (i - 1.5) * 25;
+                        const dropY = fy + 15 + Math.sin(Date.now() / 150 + i) * 8;
+                        handCtx.beginPath();
+                        handCtx.ellipse(dropX, dropY, 6, 10, 0, 0, Math.PI * 2);
+                        handCtx.fill();
+                    }
+                    // Worried expression
+                    handCtx.font = `${eyeDist * 0.8}px Arial`;
+                    handCtx.fillText('😰', nx - eyeDist * 0.4, ny + eyeDist);
+                    drawCoolGlasses(lx, ly, rx, ry, fx, fy, eyeDist, 'worried');
+                    break;
+
+                case 'red':
+                    // Red face + angry expression (Lose 3)
+                    handCtx.beginPath();
+                    handCtx.ellipse(nx, ny, faceWidth * 0.6, faceWidth * 0.7, 0, 0, Math.PI * 2);
+                    handCtx.fillStyle = 'rgba(255, 50, 50, 0.3)';
+                    handCtx.fill();
+                    // Angry veins
+                    handCtx.font = '30px Arial';
+                    handCtx.fillText('💢', fx + eyeDist, fy);
+                    drawCoolGlasses(lx, ly, rx, ry, fx, fy, eyeDist, 'angry');
+                    break;
+
+                case 'cyan':
+                    // Cyan/frozen face (Lose 5)
+                    handCtx.beginPath();
+                    handCtx.ellipse(nx, ny, faceWidth * 0.6, faceWidth * 0.7, 0, 0, Math.PI * 2);
+                    handCtx.fillStyle = 'rgba(100, 200, 255, 0.4)';
+                    handCtx.fill();
+                    // Frozen crystals
+                    handCtx.font = '25px Arial';
+                    handCtx.fillText('❄️', lx - 20, ly);
+                    handCtx.fillText('❄️', rx + 10, ry);
+                    handCtx.fillText('🥶', nx - eyeDist * 0.3, ny + eyeDist);
+                    drawCoolGlasses(lx, ly, rx, ry, fx, fy, eyeDist, 'sad');
+                    break;
+
+                default:
+                    // Normal cute mask
+                    drawCoolGlasses(lx, ly, rx, ry, fx, fy, eyeDist, 'happy');
+                    break;
+            }
+
+            handCtx.restore();
+        }
+
+        // Draw cool sunglasses with various expressions
+        function drawCoolGlasses(lx, ly, rx, ry, fx, fy, eyeDist, expression = 'happy') {
+            const glassW = eyeDist * 1.2;
+            const glassH = glassW * 0.6;
+            const glassY = (ly + ry) / 2;
+
+            handCtx.fillStyle = '#000';
+            handCtx.strokeStyle = '#000';
+            handCtx.lineWidth = 3;
+
+            // Draw different sunglasses styles based on maskType
+            const style = maskType % 4; // 0: Pixel, 1: Square, 2: Round, 3: Aviator
+
+            if (style === 0) {
+                // Pixel / Deal With It Shades
+                const pxSize = glassW / 6;
+                const drawPixelLens = (x) => {
+                    for (let i = 0; i < 6; i++) {
+                        for (let j = 0; j < 3; j++) {
+                            if (j === 0 || (j === 1 && i < 5) || (j === 2 && i < 4)) {
+                                handCtx.fillRect(x - glassW / 2 + i * pxSize, glassY - glassH / 2 + j * pxSize, pxSize, pxSize);
+                            }
+                        }
+                    }
+                };
+                drawPixelLens(lx);
+                drawPixelLens(rx);
+                // Bridge
+                handCtx.fillRect((lx + rx) / 2 - pxSize, glassY - glassH / 2, pxSize * 2, pxSize);
+            } else if (style === 1) {
+                // Classic Square
+                const cornerRad = 5;
+                const drawSquareLens = (x) => {
+                    handCtx.beginPath();
+                    handCtx.roundRect(x - glassW / 2, glassY - glassH / 2, glassW, glassH, cornerRad);
+                    handCtx.fill();
+                };
+                drawSquareLens(lx);
+                drawSquareLens(rx);
+                // Bridge
+                handCtx.beginPath();
+                handCtx.moveTo(lx + glassW / 2, glassY - glassH * 0.2);
+                handCtx.quadraticCurveTo((lx + rx) / 2, glassY - glassH * 0.4, rx - glassW / 2, glassY - glassH * 0.2);
+                handCtx.stroke();
+            } else if (style === 2) {
+                // Retro Round
+                const drawRoundLens = (x) => {
+                    handCtx.beginPath();
+                    handCtx.arc(x, glassY, glassW / 1.8, 0, Math.PI * 2);
+                    handCtx.fill();
+                };
+                drawRoundLens(lx);
+                drawRoundLens(rx);
+                // Bridge
+                handCtx.beginPath();
+                handCtx.arc((lx + rx) / 2, glassY - glassH * 0.1, eyeDist * 0.2, Math.PI, 0);
+                handCtx.stroke();
+            } else {
+                // Aviator
+                const drawAviatorLens = (x, isLeft) => {
+                    handCtx.beginPath();
+                    if (isLeft) {
+                        handCtx.ellipse(x, glassY, glassW / 1.8, glassH / 1.5, 0.2, 0, Math.PI * 2);
+                    } else {
+                        handCtx.ellipse(x, glassY, glassW / 1.8, glassH / 1.5, -0.2, 0, Math.PI * 2);
+                    }
+                    handCtx.fill();
+                };
+                drawAviatorLens(lx, true);
+                drawAviatorLens(rx, false);
+                // Double Bridge
+                handCtx.beginPath();
+                handCtx.moveTo(lx + glassW / 4, glassY - glassH / 3);
+                handCtx.lineTo(rx - glassW / 4, glassY - glassH / 3);
+                handCtx.moveTo(lx + glassW / 4, glassY - glassH / 1.5);
+                handCtx.lineTo(rx - glassW / 4, glassY - glassH / 1.5);
+                handCtx.stroke();
+            }
+
+            // Reflection line on glasses
+            handCtx.strokeStyle = 'rgba(255, 255, 255, 0.3)';
+            handCtx.lineWidth = 4;
+            handCtx.beginPath();
+            handCtx.moveTo(lx - glassW / 3, glassY - glassH / 3);
+            handCtx.lineTo(lx - glassW / 6, glassY - glassH / 6);
+            handCtx.moveTo(rx - glassW / 3, glassY - glassH / 3);
+            handCtx.lineTo(rx - glassW / 6, glassY - glassH / 6);
+            handCtx.stroke();
+
+            // Handle eyes/expressions on the lens
+            const eyeSize = eyeDist * 0.2;
+            handCtx.fillStyle = '#FFF';
+            handCtx.strokeStyle = '#FFF';
+            handCtx.lineWidth = 2;
+
+            switch (expression) {
+                case 'happy':
+                    // Sparkles on lens
+                    handCtx.font = `${eyeDist * 0.4}px Arial`;
+                    handCtx.fillText('✨', lx - eyeDist * 0.2, glassY);
+                    handCtx.fillText('✨', rx - eyeDist * 0.2, glassY);
+                    break;
+                case 'worried':
+                    // Squinting white lines
+                    handCtx.beginPath();
+                    handCtx.moveTo(lx - eyeSize, glassY); handCtx.lineTo(lx + eyeSize, glassY);
+                    handCtx.moveTo(rx - eyeSize, glassY); handCtx.lineTo(rx + eyeSize, glassY);
+                    handCtx.stroke();
+                    break;
+                case 'angry':
+                    // Angry white dots
+                    handCtx.beginPath();
+                    handCtx.arc(lx, glassY, eyeSize / 2, 0, Math.PI * 2);
+                    handCtx.arc(rx, glassY, eyeSize / 2, 0, Math.PI * 2);
+                    handCtx.fill();
+                    // Eyebrows above glasses
+                    handCtx.strokeStyle = '#000';
+                    handCtx.lineWidth = 4;
+                    handCtx.beginPath();
+                    handCtx.moveTo(lx - eyeDist / 2, glassY - glassH);
+                    handCtx.lineTo(lx + eyeDist / 4, glassY - glassH * 0.7);
+                    handCtx.moveTo(rx + eyeDist / 2, glassY - glassH);
+                    handCtx.lineTo(rx - eyeDist / 4, glassY - glassH * 0.7);
+                    handCtx.stroke();
+                    break;
+                case 'sad':
+                    // Teardrop falling from glass
+                    handCtx.fillStyle = '#87CEEB';
+                    handCtx.beginPath();
+                    handCtx.ellipse(lx, glassY + glassH / 2 + 10, 5, 8, 0, 0, Math.PI * 2);
+                    handCtx.fill();
+                    break;
+            }
+
+            // Pink blush cheeks below glasses
+            handCtx.fillStyle = 'rgba(255, 100, 150, 0.4)';
+            handCtx.beginPath();
+            handCtx.ellipse(lx - eyeDist * 0.3, glassY + glassH * 0.8, eyeDist * 0.2, eyeDist * 0.12, 0, 0, Math.PI * 2);
+            handCtx.fill();
+            handCtx.beginPath();
+            handCtx.ellipse(rx + eyeDist * 0.3, glassY + glassH * 0.8, eyeDist * 0.2, eyeDist * 0.12, 0, 0, Math.PI * 2);
+            handCtx.fill();
+        }
+
+
+        // Draw environmental effects (Rain, Thunder, Darkness)
+        function drawWeather() {
+            const w = handCanvas.width;
+            const h = handCanvas.height;
+
+            // 1. Rain (Lose 3+)
+            if (isRainy) {
+                if (rainParticles.length < 150) {
+                    rainParticles.push({
+                        x: Math.random() * w,
+                        y: -50,
+                        len: 15 + Math.random() * 15,
+                        vy: 20 + Math.random() * 10
+                    });
+                }
+
+                handCtx.save();
+                handCtx.strokeStyle = 'rgba(170, 190, 255, 0.4)';
+                handCtx.lineWidth = 1.5;
+                for (let i = rainParticles.length - 1; i >= 0; i--) {
+                    const r = rainParticles[i];
+                    handCtx.beginPath();
+                    handCtx.moveTo(r.x, r.y);
+                    handCtx.lineTo(r.x, r.y + r.len);
+                    handCtx.stroke();
+                    r.y += r.vy;
+                    if (r.y > h + 50) rainParticles.splice(i, 1);
+                }
+                handCtx.restore();
+            }
+
+            // 2. Thunder (Lose 5+)
+            if (thunderIntensity > 0) {
+                if (Math.random() < 0.015) { // Random lightning flash
+                    handCtx.save();
+                    handCtx.fillStyle = 'rgba(255, 255, 255, 0.45)';
+                    handCtx.fillRect(0, 0, w, h);
+
+                    // Draw a quick jagged line for lightning (optional but cool)
+                    handCtx.strokeStyle = 'white';
+                    handCtx.lineWidth = 5;
+                    handCtx.beginPath();
+                    let lx = Math.random() * w;
+                    handCtx.moveTo(lx, 0);
+                    for (let i = 1; i < 5; i++) {
+                        lx += (Math.random() - 0.5) * 100;
+                        handCtx.lineTo(lx, i * h / 5);
+                    }
+                    handCtx.stroke();
+                    handCtx.restore();
+                }
+            }
+
+            // 3. Darkness (Lose 7+)
+            if (darkness > 0) {
+                handCtx.save();
+                // If game over, make it completely black, otherwise semi-transparent
+                const finalDarkness = isGameOver ? 1.0 : darkness * 0.5;
+                handCtx.fillStyle = `rgba(0,0,0, ${finalDarkness})`;
+                handCtx.fillRect(0, 0, w, h);
+                handCtx.restore();
+            }
+        }
+
+        // Handle Game Over
+        function checkGameOver() {
+            if (isGameOver) {
+                debugLog("GAME OVER TRIGGERED");
+
+                // 保存记录
+                saveGameRecord(totalPoints);
+
+                const overlay = document.createElement('div');
+                overlay.id = 'gameOverOverlay';
+                overlay.style.cssText = "position:fixed;top:0;left:0;width:100%;height:100%;background:black;display:flex;flex-direction:column;justify-content:center;align-items:center;z-index:10001;color:white;font-family:Arial, sans-serif;text-align:center;animation: fadeIn 2s ease-out;";
+                overlay.innerHTML = `
+                    <h1 style="font-size:80px;color:#ff4466;text-shadow: 0 0 20px rgba(255,68,102,0.5);margin:0;">GAME OVER</h1>
+                    <p style="font-size:32px;margin:20px 0;">你已被黑暗吞噬...</p>
+                    <p style="font-size:24px;color:#aaa;margin-bottom:40px;">最后得分: ${totalPoints}</p>
+                    <button onclick="location.reload()" style="padding:20px 50px;font-size:24px;background:#00ff88;color:#000;border:none;border-radius:50px;cursor:pointer;font-weight:bold;box-shadow: 0 0 30px rgba(0,255,136,0.3);transition:transform 0.2s;">重新挑战</button>
+                    <div style="margin-top:20px; color:#ffd700; font-size:18px; cursor:pointer;" onclick="document.getElementById('openLeaderboard').click(); document.getElementById('gameOverOverlay').style.display='none';">查看成绩</div>
+                `;
+                document.body.appendChild(overlay);
+
+                // Add simple fade animation
+                const style = document.createElement('style');
+                style.innerHTML = `
+                    @keyframes fadeIn { from { opacity: 0; } to { opacity: 1; } }
+                `;
+                document.head.appendChild(style);
+            }
+        }
+
+        // --- 排行榜逻辑 ---
+        const STORAGE_KEY = 'rps_high_scores';
+
+        function saveGameRecord(score) {
+            if (score <= 0) return;
+            let scores = JSON.parse(localStorage.getItem(STORAGE_KEY) || '[]');
+            const newRecord = {
+                score: score,
+                date: new Date().toLocaleString(),
+                id: Date.now()
+            };
+            scores.push(newRecord);
+            // 只保留前50名
+            scores.sort((a, b) => b.score - a.score);
+            scores = scores.slice(0, 50);
+            localStorage.setItem(STORAGE_KEY, JSON.stringify(scores));
+            updateLeaderboardUI();
+        }
+
+        function updateLeaderboardUI() {
+            const listEl = document.getElementById('rankList');
+            const scores = JSON.parse(localStorage.getItem(STORAGE_KEY) || '[]');
+
+            if (scores.length === 0) {
+                listEl.innerHTML = '<div style="text-align:center; padding: 20px; color: #888;">暂无记录</div>';
+                return;
+            }
+
+            listEl.innerHTML = scores.map((item, index) => `
+                <div class="rank-item" style="animation: slideIn 0.3s ease forwards ${index * 0.05}s">
+                    <div class="rank-info">
+                        <div class="rank-pos">${index + 1}</div>
+                        <div class="rank-score-details">
+                            <div class="rank-score">${item.score}</div>
+                            <div class="rank-date">${item.date}</div>
+                        </div>
+                    </div>
+                    <div>${index === 0 ? '👑' : ''}</div>
+                </div>
+            `).join('');
+        }
+
+        // 事件绑定
+        document.getElementById('openLeaderboard').addEventListener('click', () => {
+            updateLeaderboardUI();
+            document.getElementById('leaderboardPanel').classList.add('show');
+        });
+
+        document.getElementById('closeLeaderboard').addEventListener('click', () => {
+            document.getElementById('leaderboardPanel').classList.remove('show');
+        });
+
+        // 初始化摄像头
+        async function initCamera() {
+            try {
+                const camera = new Camera(cameraElement, {
+                    onFrame: async () => {
+                        await hands.send({ image: cameraElement });
+                        await faceMesh.send({ image: cameraElement });
+                        drawFaceMask(); // Draw mask overlay
+                        drawWeather(); // Draw environmental effects
+                    },
+                    width: 1280,
+                    height: 720
+                });
+                await camera.start();
+                loadingElement.classList.add('hidden');
+            } catch (error) {
+                console.error('摄像头初始化失败:', error);
+                loadingElement.innerHTML = `
+                    <p style="color: #ff4466; font-size: 24px;">⚠️ 无法访问摄像头</p>
+                    <p style="margin-top: 10px;">请确保已授予摄像头权限</p>
+                `;
+                throw new Error("Camera initialization failed."); // Re-throw to stop game init
+            }
+        }
+
+        // DEBUG LOGGER
+        function debugLog(msg) {
+            console.log(msg);
+            let d = document.getElementById('debug-console');
+            if (!d) {
+                d = document.createElement('div');
+                d.id = 'debug-console';
+                d.style.cssText = "position:fixed;top:0;right:0;width:300px;height:200px;overflow:auto;background:rgba(0,0,0,0.5);color:lime;font-size:12px;z-index:9999;pointer-events:none;";
+                document.body.appendChild(d);
+            }
+            d.innerHTML = `<div>${new Date().toLocaleTimeString()} ${msg}</div>` + d.innerHTML;
+        }
+
+        // 绑定事件
+        startBtn.addEventListener('click', () => {
+            debugLog("Start Button Clicked");
+            startRound().catch(e => {
+                debugLog("ERROR in startRound: " + e.message);
+                alert("Game Error: " + e.message);
+                gameState = 'idle';
+                startBtn.disabled = false;
+            });
+        });
+
+        // 动画循环
+        function animate() {
+            // Particles
+            updateParticles();
+            drawParticles();
+            requestAnimationFrame(animate);
+        }
+
+        // 初始化
+        async function initGame() {
+            try {
+                debugLog("--------------------------");
+                debugLog("Step 1: Init Camera...");
+                await initCamera();
+                debugLog("Step 2: Camera DONE. Init UI...");
+
+                try {
+                    updateBattleUI(1);
+                    debugLog("Step 3: UI DONE.");
+                } catch (uiErr) {
+                    debugLog("CRITICAL UI ERROR: " + uiErr.message);
+                    console.error(uiErr);
+                }
+
+                debugLog("Step 4: Starting Animate Loop...");
+                animate();
+                debugLog("Step 5: ALL SYSTEMS GO. READY.");
+                debugLog("--------------------------");
+            } catch (err) {
+                console.error("Game Init Failed:", err);
+                debugLog("INIT FATAL ERROR: " + err.message);
+                document.body.innerHTML += `<div style="position:fixed;top:50%;left:50%;transform:translate(-50%,-50%);color:red;background:black;padding:20px;z-index:9999">Game Error: ${err.message}</div>`;
+            }
+        }
+
+        let emptyHandCount = 0;
+        // Modified processHandResults to log detection status
+        const originalProcess = processHandResults;
+        // We override the listener below
+
+
+        initGame();
+    </script>
+</body>
+
+</html>
